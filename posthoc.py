@@ -1,20 +1,23 @@
 import torch
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import tqdm
-from torchvision.transforms import Compose, Normalize, ToTensor
 import os
 import argparse
-import random
 
-from pytorch_grad_cam import GradCAM
+from scipy.spatial.distance import pdist
+from tqdm import tqdm
+from torchvision.transforms import Compose, Normalize, ToTensor
+
+from pytorch_grad_cam import GradCAM, GradCAMPlusPlus
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from pytorch_grad_cam.utils.image import show_cam_on_image
 
+# Load external modules
 from image_dataloader import image_loader
 from nets.network_cnn import model
 
-#------------------------------------------------------------------Loading Pre-Trained model---------------------------------------------------------------
+# ------------------------------------------------------------------Loading Pre-Trained model---------------------------------------------------------------
+
 # Load pre-trained model
 def load_model(checkpoint_path, device='cuda'):
     net = model(num_classes=4).to(device)
@@ -31,9 +34,10 @@ class_labels = {
     3: 'Both Crackle and Wheeze'
 }
 
-#---------------------------------------------------------------------Input_Perturbation------------------------------------------------------------------
+# ---------------------------------------------------------------------Input_Perturbation------------------------------------------------------------------
 
 def input_perturbation(model, image, device='cuda', batch_size=64):
+    """Input perturbation"""
     
     # Forwarding the original input into the model obtaining the 'original prob'
     image = image.to(device)
@@ -83,9 +87,11 @@ def input_perturbation(model, image, device='cuda', batch_size=64):
             
     return importance_map.cpu(), original_pred_class, original_prob, original_probs
 
-#------------------------------------------------------------------------Display_Results------------------------------------------------------------------
+
+# --------------------------------------------------------------------Display_Importance_Map------------------------------------------------------------------
 
 def display_importance_map(original_image, importance_map, predicted_class, original_prob, output_dir, sample_index, true_label):
+    """Display importance map result from input perturbation"""
     
     # Create output directory if it doesn't exist
     if not os.path.exists(output_dir):
@@ -100,23 +106,26 @@ def display_importance_map(original_image, importance_map, predicted_class, orig
 
     # Normalize importance map
     if importance_map.max() != importance_map.min():
-        importance_map = (importance_map - importance_map.min()) / (importance_map.max() - importance_map.min())
+        importance_map = 2 * (importance_map - importance_map.min()) / (importance_map.max() - importance_map.min()) - 1    
     else:
         importance_map = np.zeros_like(importance_map)  # Set to zeros if all values are the same
 
-    # Plot and save the image with the importance map
-    plt.figure(figsize=(16, 8), dpi=300)
-    plt.subplot(1, 2, 1)
-    plt.imshow(original_image)
-    plt.title(f"[Original Input] \nPredicted Class: {class_labels[predicted_class]} {'%.3f' % original_prob}")
+    # Create the subplot figure
+    fig, axs = plt.subplots(1, 2, figsize=(20, 10), dpi=300)
+    fig.suptitle('Post-Hoc Explainability')
 
-    plt.subplot(1, 2, 2)
-    plt.imshow(original_image, alpha=0.4)
-    plt.imshow(importance_map, cmap='nipy_spectral', alpha=0.8)  # Show the importance map in heatmap format
-    plt.title(f"[Importance Map]")
+    # Original input image
+    axs[0].imshow(original_image)
+    axs[0].set_title(f'[Original Input]: {class_labels[predicted_class]} {"%.3f" % original_prob}')
+
+    # Importance map with colorbar
+    # Set the vmin and vmax to properly display the range of -1 to 1
+    im = axs[1].imshow(importance_map, cmap='nipy_spectral', vmin=-1, vmax=1, alpha=0.8)
+    axs[1].set_title('[Importance Map]')
+
+    cbar = fig.colorbar(im, ax=axs[1], orientation='vertical', fraction=0.046, pad=0.04)  
     
-    plt.colorbar()
-    
+
     # Save the figure
     output_path = os.path.join(output_dir, f'sample_{sample_index}_importance_map.png')
     plt.savefig(output_path)
@@ -125,49 +134,111 @@ def display_importance_map(original_image, importance_map, predicted_class, orig
 
 # ----------------------------------------------------------------------Generate Grad-CAM-------------------------------------------------------------------
 
-def generate_gradcam(model, image, predicted_class, image_numpy, output_dir, sample_index):
-    """Generate and save GradCAM visualization."""
-    target_layer = model.model_ft.layer4
-    cam = GradCAM(model=model, target_layers=[target_layer])
-    grayscale_cam = cam(input_tensor=image.unsqueeze(0))[0]
+def generate_aggregated_gradcam(model, image, image_numpy, output_dir, sample_index, return_map=False):
+    """Generate aggregated Grad-CAM++ visualization across multiple layers."""
+    
+    layers = [model.model_ft.layer2, model.model_ft.layer3, model.model_ft.layer4]  # Adjust based on architecture
+    aggregated_cam = None
 
-    # Overlay GradCAM on original image
-    visualization = show_cam_on_image(image_numpy, grayscale_cam, use_rgb=True)
+    for layer in layers:
+        cam = GradCAMPlusPlus(model=model, target_layers=[layer])
+        grayscale_cam = cam(input_tensor=image.unsqueeze(0))[0]
+        aggregated_cam = grayscale_cam if aggregated_cam is None else aggregated_cam + grayscale_cam
 
-    plt.figure(figsize=(12, 6), dpi=300)
-    # original image on the left
-    plt.subplot(1, 2, 1)
-    plt.imshow(image_numpy)
-    plt.title("[Original Input]")
+    # Average the Grad-CAM maps from all layers
+    aggregated_cam /= len(layers)
+    visualization = show_cam_on_image(image_numpy, aggregated_cam, use_rgb=True)
 
-    # GradCAM on the right
-    plt.subplot(1, 2, 2)
-    plt.imshow(visualization)
-    plt.title(f"[GradCAM]\nPredicted Class: {class_labels[predicted_class]}")
+    # Create figure and save visualization
+    fig, axs = plt.subplots(1, 2, figsize=(20, 10), dpi=300)
+    fig.suptitle('Post-Hoc Explainability - Aggregated Grad-CAM++')
+    axs[0].imshow(image_numpy)
+    axs[0].set_title('[Original Input]')
+    im = axs[1].imshow(visualization)
+    axs[1].set_title(f'[Aggregated Grad-CAM++]')
+    fig.colorbar(im, ax=axs[1], orientation='vertical', fraction=0.046, pad=0.04)
 
-    output_path = os.path.join(output_dir, f'sample_{sample_index}_gradcam.png')
+    output_path = os.path.join(output_dir, f'sample_{sample_index}_aggregated_gradcampp.png')
     plt.savefig(output_path)
     plt.close()
+
+    if return_map:
+        return aggregated_cam
+
+
+# ----------------------------------------------------------------------Generate smoothGrad------------------------------------------------------------------
+
+def smoothgrad_camplusplus(model, image, image_numpy, output_dir, sample_index, n_samples=25, noise_level=0.1, return_map=False):
+    """Generate SmoothGrad-CAM++ visualization by averaging Grad-CAM++ results over noisy input copies."""
     
+    target_layer = model.model_ft.layer4
+    cam = GradCAMPlusPlus(model=model, target_layers=[target_layer])
+
+    # Accumulate Grad-CAM++ maps across multiple noisy samples
+    smooth_gradcam = np.zeros_like(image_numpy[..., 0])
+    for _ in range(n_samples):
+        noise = noise_level * torch.randn_like(image).to(image.device)
+        noisy_image = image + noise
+        grayscale_cam = cam(input_tensor=noisy_image.unsqueeze(0))[0]
+        smooth_gradcam += grayscale_cam
+
+    # Average and normalize the result
+    smooth_gradcam /= n_samples
+    visualization = show_cam_on_image(image_numpy, smooth_gradcam, use_rgb=True)
+
+    # Create figure and save visualization
+    fig, axs = plt.subplots(1, 2, figsize=(20, 10), dpi=300)
+    fig.suptitle('Post-Hoc Explainability - SmoothGrad-CAM++')
+    axs[0].imshow(image_numpy)
+    axs[0].set_title('[Original Input]')
+    im = axs[1].imshow(visualization)
+    axs[1].set_title('[SmoothGrad-CAM++]')
+    fig.colorbar(im, ax=axs[1], orientation='vertical', fraction=0.046, pad=0.04)
+
+    output_path = os.path.join(output_dir, f'sample_{sample_index}_smoothgrad_campp.png')
+    plt.savefig(output_path)
+    plt.close()
+
+    if return_map:
+        return smooth_gradcam
+
+
+# ---------------------------------------------------------------------Mean and Variance L1-----------------------------------------------------------------
+
+def importance_map_stability(model, image, device='cuda'):
+    """Compute stability of the importance map."""
     
-#-----------------------------------------------------------------------------Main--------------------------------------------------------------------------
+    X = [input_perturbation(model, image, device)[0].flatten() for _ in range(6)]
+    
+    # L1 distance matrix 
+    L1 = pdist(X, metric='minkowski', p=1)
+    
+    # Compute mean and variance of L1 
+    mean_L1 = np.mean(L1)
+    var_L1 = np.var(L1)
+    
+    return mean_L1, var_L1
+
+
+# -----------------------------------------------------------------------------Main-------------------------------------------------------------------------
 
 def main(data_dir, checkpoint, folds_file, output_dir, sample_index):
+    
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # Initialize data loader
     test_transform = Compose([ToTensor(), Normalize(mean=[0.5091, 0.1739, 0.4363],
                                                     std=[0.2288, 0.1285, 0.0743])])
     test_dataset = image_loader(data_dir, folds_file, test_fold=4, train_flag=False,
-                                params_json="params_json", input_transform=test_transform)
+                                params_json='params_json', input_transform=test_transform)
 
     # Load model
     model = load_model(checkpoint, device)
     if model is not None:
-        print("Model loaded successfully.")
+        print('Model loaded successfully.')
     else: 
-        print("Error: Model failed to load. Please check the checkpoint path and device.")
-        raise ValueError("Model loading failed")
+        print('Error: Model failed to load. Please check the checkpoint path and device.')
+        raise ValueError('Model loading failed')
         
     for index in sample_index:
         print('Post-Hoc Explainability...sample index: ', index)
@@ -175,33 +246,41 @@ def main(data_dir, checkpoint, folds_file, output_dir, sample_index):
 
         # Generate explanation for the image
         importance_map, predicted_class, original_prob, all_probs = input_perturbation(model, image, device)
-
+        
+        """Uncomment this part to compute mean and variance of L1 matrix"""
+        # mean_L1, var_L1 = importance_map_stability(model, image, device)
+        
+        # print(f'Mean of the matrix of distances L1:', mean_L1)
+        # print(f'Variance of the matrix of distances L1:',var_L1)
+        
+        """"""
+        
         # Convert the image to numpy for visualization
-        # Denormalize the image for visualization
         mean = np.array([0.5091, 0.1739, 0.4363])
         std = np.array([0.2288, 0.1285, 0.0743])
         image_numpy = image.permute(1, 2, 0).cpu().numpy()  # Convert from (C, H, W) to (H, W, C)
         image_numpy = (image_numpy * std) + mean  # Denormalize
         image_numpy = np.clip(image_numpy, 0, 1)
 
-        # Save the importance map and results
+        # Display importance map
         display_importance_map(image_numpy, importance_map, predicted_class, original_prob, output_dir, index, label)
-
-        # GradCAM
-        generate_gradcam(model, image, predicted_class, image_numpy, output_dir, index)
         
-        # Print out the true label and predicted label
-        print(f"True Label: {class_labels[label]}")
-        print(f"Predicted Label: {class_labels[predicted_class]} with probability {'%.3f' % original_prob}")
+        # Generate Grad-CAM++
+        aggregated_gradcam_map = generate_aggregated_gradcam(model, image, image_numpy, output_dir, index, return_map=True)
+        smooth_gradcam_map = smoothgrad_camplusplus(model, image, image_numpy, output_dir, sample_index, n_samples=25, noise_level=0.1, return_map=True)
 
-if __name__ == "__main__":
+        # Print out the true label and predicted label
+        print(f'True Label: {class_labels[label]}')
+        print(f'Predicted Label: {class_labels[predicted_class]} with probability {'%.3f' % original_prob}')
+            
+if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='RespireNet: Post-Hoc Explanation of Lung Sound Classification')
-    parser.add_argument('--data_dir', type=str, help='data directory')
-    parser.add_argument('--checkpoint', default=None, type=str, help='load checkpoint')
-    parser.add_argument('--folds_file', type=str, help='patient list foldwise')
-    parser.add_argument('--output_dir', type=str, help='xai results saving directory')
-    parser.add_argument('--sample_index', type=int, nargs='+', help='sample indices as list of integers')
-    
+    parser.add_argument('--data_dir', type=str, required=True, help='Path to the dataset')
+    parser.add_argument('--checkpoint', type=str, required=True, help='Path to the model checkpoint')
+    parser.add_argument('--folds_file', type=str, required=True, help='Path to the folds file for dataset split')
+    parser.add_argument('--output_dir', type=str, required=True, help='Directory to save the outputs')
+    parser.add_argument('--sample_index', type=int, nargs='+', required=True, help='List of sample indices for explanation')
+
     args = parser.parse_args()
     main(args.data_dir, args.checkpoint, args.folds_file, args.output_dir, args.sample_index)
