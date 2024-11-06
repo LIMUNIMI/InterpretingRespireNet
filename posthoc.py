@@ -137,7 +137,7 @@ def display_importance_map(original_image, importance_map, predicted_class, orig
 def generate_aggregated_gradcam(model, image, image_numpy, output_dir, sample_index, return_map=False):
     """Generate aggregated Grad-CAM++ visualization across multiple layers."""
     
-    layers = [model.model_ft.layer2, model.model_ft.layer3, model.model_ft.layer4]  # Adjust based on architecture
+    layers = [model.model_ft.layer2, model.model_ft.layer3, model.model_ft.layer4] 
     aggregated_cam = None
 
     for layer in layers:
