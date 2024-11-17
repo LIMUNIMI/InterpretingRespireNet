@@ -27,7 +27,7 @@ umap-learn==0.5.6
 ```
 
 ## Dataset
-The dataset used is [ICBHI 2017 Challenge Respiratory Sound Database](https://bhichallenge.med.auth.gr/ICBHI_2017_Challenge)
-Steps to follow to use the dataset 
+The dataset used is \*\*[ICBHI 2017 Challenge Respiratory Sound Database](https://bhichallenge.med.auth.gr/ICBHI_2017_Challenge)\*\*. 
+Here are the steps to follow to use the dataset. 
 1. Go to the official page of [ICBHI 2017 Challenge Respiratory Sound Database](https://bhichallenge.med.auth.gr/ICBHI_2017_Challenge)
 2. Download it and paste it into the folder: ```data```
