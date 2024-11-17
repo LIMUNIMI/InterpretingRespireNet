@@ -1,1 +1,3 @@
-python posthoc.py --data_dir ./data/icbhi_dataset/audio_text_data/ --checkpoint models/ckpt_best.pkl --folds_file ./data/patient_list_foldwise.txt --output_dir ./xai_results/ --sample_index 0
+python posthoc.py --data_dir ./data/icbhi_dataset/audio_text_data/ --checkpoint models/ckpt_best.pkl --folds_file ./data/patient_list_foldwise.txt --output_dir ./xai_results/ --sample_index $(seq 0 1443) | tee experiment.log
+# python posthoc.py --data_dir ./data/icbhi_dataset/audio_text_data/ --checkpoint models/ckpt_best.pkl --folds_file ./data/patient_list_foldwise.txt --output_dir ./xai_results/ --sample_index 0 | tee experiment.log
+# python posthoc.py --data_dir ./data/icbhi_dataset/audio_text_data/ --checkpoint models/ckpt_best.pkl --folds_file ./data/patient_list_foldwise.txt --output_dir ./xai_results/ --sample_index 0 10 20 30 40 50 100  | tee experiment.log
