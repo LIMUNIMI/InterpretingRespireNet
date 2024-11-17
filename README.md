@@ -1,8 +1,9 @@
 # Interpreting RespireNet
 
-Implementation of the ‘Explaining Audio Classification models for Respiratory Sounds’ project based on RespireNet Model. 
+Implementation of the _‘Explaining Audio Classification models for Respiratory Sounds’_ project based on _RespireNet_. 
 
 ## Dependencies:
+---------------------------------------------------------------------------------------------------------------------
 ```
 Python3.12
 tensorflow==2.17.0
