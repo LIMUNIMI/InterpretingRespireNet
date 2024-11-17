@@ -33,3 +33,13 @@ The dataset used is [ICBHI 2017 Challenge Respiratory Sound Database](https://bh
 Here are the steps to follow to use the dataset. 
 * Go to the official page of [ICBHI 2017 Challenge Respiratory Sound Database](https://bhichallenge.med.auth.gr/ICBHI_2017_Challenge)
 * Download it and paste it into the folder: ```data```
+
+## Post-hoc explainability command
+The following command allows _Importance-Maps, Aggregated-GradCAM++, SmoothGradCam++_ to be generated on the entire _dataset_.  
+```
+python posthoc.py --data_dir ./data/icbhi_dataset/audio_text_data/ --checkpoint models/ckpt_best.pkl --folds_file ./data/patient_list_foldwise.txt --output_dir ./xai_results/ --sample_index $(seq 0 1443) | tee experiment.log
+```
+The following command allows _Importance-Maps, Aggregated-GradCAM++, SmoothGradCam++_ to be generated on the individual sample or a list of samples for possible future development. 
+```
+python posthoc.py --data_dir ./data/icbhi_dataset/audio_text_data/ --checkpoint models/ckpt_best.pkl --folds_file ./data/patient_list_foldwise.txt --output_dir ./xai_results/ --sample_index 0 | tee experiment.log
+```
