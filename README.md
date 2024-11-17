@@ -3,7 +3,6 @@
 Implementation of the _‘Explaining Audio Classification models for Respiratory Sounds’_ project based on _RespireNet_. 
 
 ## Dependencies:
----------------------------------------------------------------------------------------------------------------------
 ```
 Python3.12
 tensorflow==2.17.0
@@ -26,3 +25,9 @@ librosa==0.10.2.post1
 pytorch-lightning==2.0.0
 umap-learn==0.5.6
 ```
+
+## Dataset
+The dataset used is [ICBHI 2017 Challenge Respiratory Sound Database](https://bhichallenge.med.auth.gr/ICBHI_2017_Challenge)
+Steps to follow to use the dataset 
+1. Go to the official page of [ICBHI 2017 Challenge Respiratory Sound Database](https://bhichallenge.med.auth.gr/ICBHI_2017_Challenge)
+2. Download it and paste it into the folder: ```data```
