@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import os
 import argparse
 import random
+import re 
 
 from scipy.spatial.distance import pdist
 from tqdm import tqdm
@@ -235,7 +236,7 @@ def main(data_dir, checkpoint, folds_file, output_dir, sample_index):
                                                     std=[0.2288, 0.1285, 0.0743])])
     test_dataset = image_loader(data_dir, folds_file, test_fold=4, train_flag=False,
                                 params_json='params_json', input_transform=test_transform)
-
+    
     # Load model
     model = load_model(checkpoint, device)
     if model is not None:
